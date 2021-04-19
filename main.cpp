@@ -19,6 +19,8 @@ int main(int argc, char *argv[]) {
     int desiredFrequency = 60;
 
     float vk = 3; //força do chute
+    float v = 3; //Velocidade de movimento manual
+    float vw = 2; //Velocidade de rotação manual
 
     //Definindo o robô "atacante"
     bool isYellow = true;
@@ -110,85 +112,177 @@ int main(int argc, char *argv[]) {
          actuator->sendCommand(isYellow, chosenID, 0, 0, 0, true, 0, false);
     };
 
-    auto kickBall = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, float vk, bool isChip){
-         //pegando instância atual do robô selecionado
-         SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
-         //pegando instância atual da posição da bola
-         SSL_DetectionBall ball = vision->getLastBallDetection();
-
+    auto kickBall = [](Actuator *actuator, bool isYellow, int chosenID, float vk, bool isChip){
          //Teoricamente, o robô já está em posse da bola!
 
-         //Faz o robô chutar!
          actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, vk, isChip);
          usleep(1000000);//sleeps for 1 second
          actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, 0, false);
     };
 
-    while(true) {
-        // TimePoint
-        std::chrono::high_resolution_clock::time_point beforeProcess = std::chrono::high_resolution_clock::now();
+    auto manualMove = [](Actuator *actuator, bool isYellow, int chosenID, float vx, float vy, bool spinner){
+        actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
+        usleep(100000);//sleeps for 1 second
+        actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+    };
 
-        // Process vision and actuator commands
-        vision->processNetworkDatagrams();
-        usleep(1000000);
+    auto manualRotation = [](Actuator *actuator, bool isYellow, int chosenID, float vw, bool spinner){
+        actuator->sendCommand(isYellow, chosenID, 0, 0, vw, spinner, 0, false);
+        usleep(100000);//sleeps for 1 second
+        actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+    };
 
-        float d = 5; // distância entre o robô e a bola
+    while (true){
+            std::cout << "Qual modo deseja usar? 'a' para automático, 'm' para manual:" << std::endl;
+            char modo = '0';
+            cin >> modo;
+            if (modo == 'a'){
+                std::cout << "O amarelo 3 ficará chutando ao gol!" << std::endl;
 
-         char aux;
+                while(true) {
+                        // TimePoint
+                        std::chrono::high_resolution_clock::time_point beforeProcess = std::chrono::high_resolution_clock::now();
 
-        do{
-            vision->processNetworkDatagrams();
-            //pegando instância atual do robô selecionado
-            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
-            //pegando instância atual da posição da bola
-            SSL_DetectionBall ball = vision->getLastBallDetection();
+                        // Process vision and actuator commands
+                        vision->processNetworkDatagrams();
+                        usleep(1000000);
 
+                        float d = 5; // distância entre o robô e a bola
 
-            facePoint(vision, actuator, isYellow, chosenID, true);
-            std::cout << "Olhando para a bola===================================================================" << std::endl;
-            pickBall(vision, actuator, isYellow, chosenID);
-            std::cout << "indo para a bola===================================================================" << std::endl;
-            cin >> aux;
-            float bx = ball.x();
-            float by = ball.y();
-            float rx = robot.x();
-            float ry = robot.y();
+                         char aux;
 
-
-            std::cout << "Coord bola: " << bx << " | " << by << std::endl;
-            std::cout << "Coord robô: " << rx << " | " << ry << std::endl;
+                        do{
+                            vision->processNetworkDatagrams();
+                            //pegando instância atual do robô selecionado
+                            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+                            //pegando instância atual da posição da bola
+                            SSL_DetectionBall ball = vision->getLastBallDetection();
 
 
-             //Calcula distância d entre a bola e o robô
-             float c1 = rx - bx;
-             float c2 = ry - by;
-             c1 = qPow(c1, 2);
-             c2 = qPow(c2, 2);
-             d = qSqrt(c1 + c2);
-        }while(d>5);
+                            facePoint(vision, actuator, isYellow, chosenID, true);
+                            std::cout << "Olhando para a bola===================================================================" << std::endl;
+                            pickBall(vision, actuator, isYellow, chosenID);
+                            std::cout << "indo para a bola===================================================================" << std::endl;
+                            cin >> aux;
+                            float bx = ball.x();
+                            float by = ball.y();
+                            float rx = robot.x();
+                            float ry = robot.y();
 
-        facePoint(vision, actuator, isYellow, chosenID, false);
-        std::cout << "olhando para o gol===================================================================" << std::endl;
-        cin >> aux;
-        kickBall(vision, actuator, isYellow, chosenID, vk, isChip);
-        std::cout << "Chutando a bola===================================================================" << std::endl;
-        cin >> aux;
-        usleep(2000000);
 
-        //Faz com que a cada iteração, ele mude o tipo de chute.
-        if (isChip){
-            isChip = false;
-        } else{
-            isChip = true;
+                            std::cout << "Coord bola: " << bx << " | " << by << std::endl;
+                            std::cout << "Coord robô: " << rx << " | " << ry << std::endl;
+
+
+                             //Calcula distância d entre a bola e o robô
+                             float c1 = rx - bx;
+                             float c2 = ry - by;
+                             c1 = qPow(c1, 2);
+                             c2 = qPow(c2, 2);
+                             d = qSqrt(c1 + c2);
+                        }while(d>5);
+
+                        facePoint(vision, actuator, isYellow, chosenID, false);
+                        std::cout << "olhando para o gol===================================================================" << std::endl;
+                        cin >> aux;
+                        kickBall(actuator, isYellow, chosenID, vk, isChip);
+                        std::cout << "Chutando a bola===================================================================" << std::endl;
+                        cin >> aux;
+                        usleep(2000000);
+
+                        //Faz com que a cada iteração, ele mude o tipo de chute.
+                        if (isChip){
+                            isChip = false;
+                        } else{
+                            isChip = true;
+                        }
+
+                        // TimePoint
+                        std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
+
+                        // Sleep thread
+                        long remainingTime = (1000 / desiredFrequency) - (std::chrono::duration_cast<std::chrono::milliseconds>(afterProcess - beforeProcess)).count();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(remainingTime));
+                    }
+
+            }
+
+            else if (modo == 'm'){
+                while (true){
+                    //selecionar time
+                    char team = '0';
+                    while (team != 'y' && team != 'b'){
+                        std::cout << "Qual time deseja usar? 'y' para yellow, 'b' para azul:" << std::endl;
+                        cin >> team;
+                        if (team == 'y'){
+                            isYellow = true;
+                        } else if (team == 'b'){
+                            isYellow = false;
+                        }
+                    }
+
+                    //Selecionar o robô
+                    chosenID = -1;
+                    while(!(chosenID >= 0 && chosenID <= 3)){
+                        std::cout << "Qual robô deseja controlar? Digite o seu ID (0 a 3):" << std::endl;
+                        cin >> chosenID;
+                    }
+
+                    //comandos:
+                    //Para que o comando seja tratado como um impulso, e não como uma velocidade constante,
+                    //fiz o programa pausar por um tempo, depois passei um novo comando zerando as velocidades após o impulso.
+                    std::cout << "Você já pode controlar o robô! wasd para movimentação, qe para rotação." << std::endl;
+                    std::cout << "z para chutar, x para chutar parabolicamente, z para ligar/desligar dribble." << std::endl;
+                    std::cout << "p para parar." << std::endl;
+                    char command = 's';
+                    bool spinner = false;
+
+                    while (command != 'p'){
+
+                        cin >> command;
+
+                        if (command == 'w'){
+                            manualMove(actuator, isYellow, chosenID, v, 0, spinner);
+                        } else if (command == 'a') {
+                            manualMove(actuator, isYellow, chosenID, 0, v, spinner);
+                        } else if (command == 's') {
+                            manualMove(actuator, isYellow, chosenID, -v, 0, spinner);
+                        } else if (command == 'd') {
+                            manualMove(actuator, isYellow, chosenID, 0, -v, spinner);
+                        } else if (command == 'q'){
+                            manualRotation(actuator, isYellow, chosenID, vw, spinner);
+                        } else if (command == 'e'){
+                            manualRotation(actuator, isYellow, chosenID, -vw, spinner);
+                        } else if (command == 'z') {
+                            //Faz o robô chutar!
+                            kickBall(actuator, isYellow, chosenID, vk, false);
+                            spinner = false;
+                        } else if (command == 'x'){
+                            //Faz o robô chutar parabolicamente!
+                            kickBall(actuator, isYellow, chosenID, vk, true);
+                            spinner = false;
+                        } else if (command == 'c') {
+                            //Liga/desliga o spinner o spinner
+                            if (spinner){
+                                spinner = false;
+                                std::cout << "Spinner desligado." << std::endl;
+                            } else {
+                                spinner = true;
+                                std::cout << "Spinner ligado." << std::endl;
+                            }
+                            actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+                        }
+
+                        //Roda a visão
+                        vision->processNetworkDatagrams();
+
+                        SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+                    }
+                }
+
+            }
+
         }
-
-        // TimePoint
-        std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
-
-        // Sleep thread
-        long remainingTime = (1000 / desiredFrequency) - (std::chrono::duration_cast<std::chrono::milliseconds>(afterProcess - beforeProcess)).count();
-        std::this_thread::sleep_for(std::chrono::milliseconds(remainingTime));
-    }
 
     return a.exec();
 }
