@@ -120,6 +120,55 @@ int main(int argc, char *argv[]) {
          actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, 0, false);
     };
 
+    auto moveToPointInFront = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, float px, float py, bool spinner) {
+
+        vision->processNetworkDatagrams();
+        SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+        float rx = robot.x();
+        float ry = robot.y();
+
+        float variacao = 0.1; //Limite de erro do robô
+
+        float vAux; //velocidade necessaria
+
+        while (rx < px-variacao || rx > px+variacao){
+            vAux = rx - px;
+            vAux = vAux/100;
+            actuator->sendCommand(isYellow, chosenID, vAux, 0, 0, spinner, 0, false);
+            usleep(100000);//sleeps for 1 second
+            actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+
+            vision->processNetworkDatagrams();
+            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+            rx = robot.x();
+            ry = robot.y();
+            rx = roundf(rx * 100) / 100;
+            ry = roundf(ry * 100) / 100;
+            std::cout << rx << " | " << ry << std::endl;
+        }
+
+        std::cout << "=======================================================================" << std::endl;
+
+        while (ry < py-variacao || ry > py+variacao){
+            vAux = ry - py;
+            vAux = vAux/100;
+            actuator->sendCommand(isYellow, chosenID, 0, vAux, 0, spinner, 0, false);
+            usleep(100000);//sleeps for 1 second
+            actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+
+            vision->processNetworkDatagrams();
+            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+            rx = robot.x();
+            ry = robot.y();
+            rx = roundf(rx * 100) / 100;
+            ry = roundf(ry * 100) / 100;
+            std::cout << rx << " | " << ry << std::endl;
+        }
+    };
+
     auto manualMove = [](Actuator *actuator, bool isYellow, int chosenID, float vx, float vy, bool spinner){
         actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
         usleep(100000);//sleeps for 1 second
@@ -239,6 +288,11 @@ int main(int argc, char *argv[]) {
 
                     while (command != 'p'){
 
+                        //Roda a visão
+                        vision->processNetworkDatagrams();
+
+                        SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
                         cin >> command;
 
                         if (command == 'w'){
@@ -271,12 +325,16 @@ int main(int argc, char *argv[]) {
                                 std::cout << "Spinner ligado." << std::endl;
                             }
                             actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+                        } else if (command == 'g'){
+                            //atenção
+                            //Quando no simulador aparece x=0.100, o vision retorna como robot.x() = 1000.
+                            float x, y;
+                            cin >> x;
+                            cin >> y;
+                            moveToPointInFront(vision, actuator,isYellow, chosenID, x, y, spinner);
+                        } else if (command == 'l'){
+                            std::cout << robot.x() << " | " << robot.y() << std::endl;
                         }
-
-                        //Roda a visão
-                        vision->processNetworkDatagrams();
-
-                        SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
                     }
                 }
 
