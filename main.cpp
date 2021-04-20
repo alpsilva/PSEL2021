@@ -283,6 +283,7 @@ int main(int argc, char *argv[]) {
                     std::cout << "Você já pode controlar o robô! wasd para movimentação, qe para rotação." << std::endl;
                     std::cout << "z para chutar, x para chutar parabolicamente, z para ligar/desligar dribble." << std::endl;
                     std::cout << "p para parar." << std::endl;
+                    std::cout << "l para mostrar posição do robô (Pode demorar um pouco para a vision atualizar)." << std::endl;
                     char command = 's';
                     bool spinner = false;
 
