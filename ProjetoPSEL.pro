@@ -36,12 +36,8 @@ SOURCES += \
         modules/module.cpp \
         modules/vision/vision.cpp \
         protobufs/command.pb.cc \
-        protobufs/command.pb.cc \
-        protobufs/common.pb.cc \
         protobufs/common.pb.cc \
         protobufs/packet.pb.cc \
-        protobufs/packet.pb.cc \
-        protobufs/replacement.pb.cc \
         protobufs/replacement.pb.cc
 
 # Default rules for deployment.
@@ -54,11 +50,7 @@ HEADERS += \
     modules/module.h \
     modules/vision/vision.h \
     protobufs/command.pb.h \
-    protobufs/command.pb.h \
-    protobufs/common.pb.h \
     protobufs/common.pb.h \
     protobufs/packet.pb.h \
-    protobufs/packet.pb.h \
-    protobufs/replacement.pb.h \
     protobufs/replacement.pb.h
 
