@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
     int desiredFrequency = 60;
 
     float v = 100; //Velocidade de movimento manual
-    float vw = 100; //Velocidade de rotação manual
+    float vw = 5; //Velocidade de rotação manual
 
     bool isYellow;
     int chosenID;
@@ -30,9 +30,9 @@ int main(int argc, char *argv[]) {
 
     auto manualRotation = [](Actuator *actuator, bool isYellow, int chosenID, float v, bool isLeft){
         if (isLeft){
-            actuator->sendCommand(isYellow, chosenID, 0, v);
+            actuator->sendCommand(isYellow, chosenID, -v, v);
         } else {
-            actuator->sendCommand(isYellow, chosenID, v, 0);
+            actuator->sendCommand(isYellow, chosenID, v, -v);
         }
 
         usleep(200000);//sleeps for 2 second
