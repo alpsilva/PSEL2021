@@ -1,4 +1,4 @@
-#include <QCoreApplication>
+﻿#include <QCoreApplication>
 #include <chrono>
 #include <thread>
 #include <modules/actuator/actuator.h>
@@ -74,29 +74,33 @@ int main(int argc, char *argv[]) {
 
         //O robô parace sempre "fugir" da ponto, então temos que adcionar 180º ao angulo desejado
         //No caso de radianos, 180º == pi
-        angle = angle + M_PI;
-        angle = angle - (2 * M_PI);
 
+        angle = angle + M_PI;
+
+        if (angle > (M_PI)){
+            float resto = angle - M_PI;
+            angle = -M_PI + resto;
+        }
 
         //Orientação atual do robô
         float orientation = robot.orientation();
 
-        float vw; //velocidade angular
+        float vw2; //velocidade angular dentro dessa função
 
         if (pointIsBall){
-            vw = 5;
+            vw2 = 2.5;
         } else{
-            vw = 2.5;
+            vw2 = 1;
         }
 
         //Faz o robô girar
         if (orientation > angle){
-            actuator->sendCommand(isYellow, chosenID, vw, -vw);
+            actuator->sendCommand(isYellow, chosenID, vw2, -vw2);
         } else{
-            actuator->sendCommand(isYellow, chosenID, -vw, vw);
+            actuator->sendCommand(isYellow, chosenID, -vw2, vw2);
         }
 
-        float variacao = 0.02; //faixa de angulação aceitável para parar o loop
+        float variacao = 0.002; //faixa de angulação aceitável para parar o loop
         float faixaInf = angle-variacao;
         float faixaSup = angle+variacao;
 
@@ -179,13 +183,13 @@ int main(int argc, char *argv[]) {
                 cin >> command;
 
                 if (command == 'w'){
-                    manualMove(actuator, isYellow, chosenID, v);
-                } else if (command == 's') {
                     manualMove(actuator, isYellow, chosenID, -v);
+                } else if (command == 's') {
+                    manualMove(actuator, isYellow, chosenID, v);
                 } else if (command == 'q'){
-                    manualRotation(actuator, isYellow, chosenID, vw, true);
-                } else if (command == 'e'){
                     manualRotation(actuator, isYellow, chosenID, vw, false);
+                } else if (command == 'e'){
+                    manualRotation(actuator, isYellow, chosenID, vw, true);
                 } else if (command == 'b'){
                     facePoint(vision, actuator, isYellow, chosenID, true, 0, 0);
                 } else if (command == 'x'){
@@ -198,6 +202,8 @@ int main(int argc, char *argv[]) {
                     }
                 } else if (command == 'l'){
                     std::cout << robot.x() << " | " << robot.y() << std::endl;
+                    float nearest = roundf(robot.orientation() * 100) / 100;
+                    std::cout << nearest << std::endl;
                 }
             }
         }
