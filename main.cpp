@@ -3,9 +3,43 @@
 #include <thread>
 #include <modules/actuator/actuator.h>
 #include <modules/vision/vision.h>
+#include <qmath.h>
+
 #include <unistd.h>
 
 using namespace std;
+
+float getPlayerRotateAngleTo(float px, float py, fira_message::Robot robot) {
+    float rx = robot.x();
+    float ry = robot.y();
+    float componentX = (px - rx);
+    float componentY = (py - ry);
+    float distToTarget = sqrt(pow(componentX, 2) + pow(componentY, 2));
+
+    componentX = componentX / distToTarget;
+
+    // Check possible divisions for 0
+    if(isnanf(componentX)) {
+        return 0.0f;
+    }
+
+    float angleOriginToTarget; // Angle from field origin to targetPosition
+    float angleRobotToTarget;  // Angle from robot to targetPosition
+
+    if(componentY < 0.0f) {
+        angleOriginToTarget = 2*M_PI - acos(componentX); // Angle that the target make with x-axis to robot
+    } else {
+        angleOriginToTarget = acos(componentX); // Angle that the target make with x-axis to robot
+    }
+
+    angleRobotToTarget = angleOriginToTarget - robot.orientation();
+
+    // Adjusting to rotate the minimum possible
+    if(angleRobotToTarget > M_PI) angleRobotToTarget -= 2.0 * M_PI;
+    if(angleRobotToTarget < -M_PI) angleRobotToTarget += 2.0 * M_PI;
+
+    return angleRobotToTarget;
+}
 
 int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
@@ -21,6 +55,64 @@ int main(int argc, char *argv[]) {
 
     bool isYellow;
     int chosenID;
+
+    auto facePoint = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall, float px, float py){
+        vision->processNetworkDatagrams();
+        //pegando instância atual do robô selecionado
+        fira_message::Robot robot = vision->getLastRobotDetection(isYellow, chosenID);
+        //pegando instância atual da posição da bola
+        fira_message::Ball ball = vision->getLastBallDetection();
+
+        //Se true, ele vira para bola. Falso, ele vira para o gol.
+        if (pointIsBall){
+            px = ball.x();
+            py = ball.y();
+        }
+
+        //Angulo necessário para o robô apontar
+        float angle = getPlayerRotateAngleTo(px, py, robot);
+
+        //O robô parace sempre "fugir" da ponto, então temos que adcionar 180º ao angulo desejado
+        //No caso de radianos, 180º == pi
+        angle = angle + M_PI;
+        angle = angle - (2 * M_PI);
+
+
+        //Orientação atual do robô
+        float orientation = robot.orientation();
+
+        float vw; //velocidade angular
+
+        if (pointIsBall){
+            vw = 5;
+        } else{
+            vw = 2.5;
+        }
+
+        //Faz o robô girar
+        if (orientation > angle){
+            actuator->sendCommand(isYellow, chosenID, vw, -vw);
+        } else{
+            actuator->sendCommand(isYellow, chosenID, -vw, vw);
+        }
+
+        float variacao = 0.02; //faixa de angulação aceitável para parar o loop
+        float faixaInf = angle-variacao;
+        float faixaSup = angle+variacao;
+
+
+        //Robô roda enquanto a orientação dele não estiver perto o bastante da variavel angle
+        while((orientation < faixaInf) || (orientation > faixaSup)){
+            vision->processNetworkDatagrams();
+            robot = vision->getLastRobotDetection(isYellow, chosenID);
+            orientation = robot.orientation();
+            std::cout << "Angulo necessário: " << angle << std::endl;
+            std::cout << "Orientação do robô: " << orientation << std::endl;
+        }
+
+        //para de rodar
+        actuator->sendCommand(isYellow, chosenID, 0, 0);
+    };
 
     auto manualMove = [](Actuator *actuator, bool isYellow, int chosenID, float v){
         actuator->sendCommand(isYellow, chosenID, v, v);
@@ -71,6 +163,7 @@ int main(int argc, char *argv[]) {
             //fiz o programa pausar por um tempo, depois passei um novo comando zerando as velocidades após o impulso.
             std::cout << "Você já pode controlar o robô! ws para movimentação, qe para rotação." << std::endl;
             std::cout << "l para mostrar posição do robô (Pode demorar um pouco para a vision atualizar)." << std::endl;
+            std::cout << "b para olhar para a bola." << std::endl;
             std::cout << "x to let it rip." << std::endl;
             std::cout << "p para parar." << std::endl;
 
@@ -93,6 +186,8 @@ int main(int argc, char *argv[]) {
                     manualRotation(actuator, isYellow, chosenID, vw, true);
                 } else if (command == 'e'){
                     manualRotation(actuator, isYellow, chosenID, vw, false);
+                } else if (command == 'b'){
+                    facePoint(vision, actuator, isYellow, chosenID, true, 0, 0);
                 } else if (command == 'x'){
                     if (beyblade){
                         actuator->sendCommand(isYellow, chosenID, 0, 0);
