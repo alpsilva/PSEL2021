@@ -79,8 +79,12 @@ int main(int argc, char *argv[]) {
         //O robô parace sempre "fugir" da ponto, então temos que adcionar 180º ao angulo desejado
         //No caso de radianos, 180º == pi
         angle = angle + M_PI;
-        angle = angle - (2 * M_PI);
 
+        //a orientation varia entre -pi e +pi
+        if (angle > (M_PI)){
+            float resto = angle - M_PI;
+            angle = -M_PI + resto;
+        }
 
         //Orientação atual do robô
         float orientation = robot.orientation();
@@ -276,6 +280,7 @@ int main(int argc, char *argv[]) {
                     //fiz o programa pausar por um tempo, depois passei um novo comando zerando as velocidades após o impulso.
                     std::cout << "Você já pode controlar o robô! wasd para movimentação, qe para rotação." << std::endl;
                     std::cout << "z para chutar, x para chutar parabolicamente, z para ligar/desligar dribble." << std::endl;
+                    std::cout << "b para olhar para a bola." << std::endl;
                     std::cout << "p para parar." << std::endl;
                     std::cout << "l para mostrar posição do robô (Pode demorar um pouco para a vision atualizar)." << std::endl;
                     char command = 's';
@@ -320,7 +325,12 @@ int main(int argc, char *argv[]) {
                                 std::cout << "Spinner ligado." << std::endl;
                             }
                             actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
-                        } else if (command == 'g'){
+                        } else if (command == 'b'){
+                            //olha para a bola
+                            facePoint(vision, actuator, isYellow, chosenID, true, 0, 0);
+                        }
+
+                        else if (command == 'g'){
                             //atenção
                             //Quando no simulador aparece x=0.100, o vision retorna como robot.x() = 1000.
                             float x, y;
