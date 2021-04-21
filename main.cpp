@@ -9,6 +9,38 @@
 
 using namespace std;
 
+float getPlayerRotateAngleTo(float px, float py, SSL_DetectionRobot robot) {
+    float rx = robot.x();
+    float ry = robot.y();
+    float componentX = (px - rx);
+    float componentY = (py - ry);
+    float distToTarget = sqrt(pow(componentX, 2) + pow(componentY, 2));
+
+    componentX = componentX / distToTarget;
+
+    // Check possible divisions for 0
+    if(isnanf(componentX)) {
+        return 0.0f;
+    }
+
+    float angleOriginToTarget; // Angle from field origin to targetPosition
+    float angleRobotToTarget;  // Angle from robot to targetPosition
+
+    if(componentY < 0.0f) {
+        angleOriginToTarget = 2*M_PI - acos(componentX); // Angle that the target make with x-axis to robot
+    } else {
+        angleOriginToTarget = acos(componentX); // Angle that the target make with x-axis to robot
+    }
+
+    angleRobotToTarget = angleOriginToTarget - robot.orientation();
+
+    // Adjusting to rotate the minimum possible
+    if(angleRobotToTarget > M_PI) angleRobotToTarget -= 2.0 * M_PI;
+    if(angleRobotToTarget < -M_PI) angleRobotToTarget += 2.0 * M_PI;
+
+    return angleRobotToTarget;
+}
+
 int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
 
@@ -22,41 +54,44 @@ int main(int argc, char *argv[]) {
     float v = 3; //Velocidade de movimento manual
     float vw = 2; //Velocidade de rotação manual
 
+
     //Definindo o robô "atacante"
     bool isYellow = true;
-    int chosenID = 3;
+    int chosenID = 1;
     bool isChip = false; //define se o chute é chip.
 
-    auto facePoint = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall){
+    auto facePoint = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall, float px, float py){
+        vision->processNetworkDatagrams();
         //pegando instância atual do robô selecionado
         SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
         //pegando instância atual da posição da bola
         SSL_DetectionBall ball = vision->getLastBallDetection();
 
-        float rx = robot.x();
-        float ry = robot.y();
-        float px;
-        float py;
-
         //Se true, ele vira para bola. Falso, ele vira para o gol.
         if (pointIsBall){
             px = ball.x();
             py = ball.y();
-        } else{
-            //coordenadas do fundo do gol
-            px = -0.8;
-            py = 0.02;
         }
 
+        //Angulo necessário para o robô apontar
+        float angle = getPlayerRotateAngleTo(px, py, robot);
 
-        //Angulo entre o eixo x e a bola
-        float angle = atan2((ry - py), (rx - px));
+        //O robô parace sempre "fugir" da ponto, então temos que adcionar 180º ao angulo desejado
+        //No caso de radianos, 180º == pi
+        angle = angle + M_PI;
+        angle = angle - (2 * M_PI);
+
 
         //Orientação atual do robô
         float orientation = robot.orientation();
-        std::cout << "Orientação inicial do robô: " << orientation << std::endl;
 
-        float vw = 1; //velocidade angular
+        float vw; //velocidade angular
+
+        if (pointIsBall){
+            vw = 1;
+        } else{
+            vw = 0.5;
+        }
 
         //Faz o robô girar
         if (orientation > angle){
@@ -65,7 +100,7 @@ int main(int argc, char *argv[]) {
             actuator->sendCommand(isYellow, chosenID, 0, 0, vw, true, 0, false);
         }
 
-        float variacao = 0.01; //faixa de angulação aceitável para parar o loop
+        float variacao = 0.02; //faixa de angulação aceitável para parar o loop
         float faixaInf = angle-variacao;
         float faixaSup = angle+variacao;
 
@@ -75,41 +110,53 @@ int main(int argc, char *argv[]) {
             vision->processNetworkDatagrams();
             robot = vision->getLastRobotDetection(isYellow, chosenID);
             orientation = robot.orientation();
-            //std::cout << "Angulo necessário: " << angle << std::endl;
-            //std::cout << "Orientação do robô: " << orientation << std::endl;
+            std::cout << "Angulo necessário: " << angle << std::endl;
+            std::cout << "Orientação do robô: " << orientation << std::endl;
         }
 
         //para de rodar
         actuator->sendCommand(isYellow, chosenID, 0, 0, 0, true, 0, false);
-
     };
 
     auto pickBall = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID){
-        //pegando instância atual do robô selecionado
-        SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
-        //pegando instância atual da posição da bola
-        SSL_DetectionBall ball = vision->getLastBallDetection();
+        float d = 50000;
+        do {
+            vision->processNetworkDatagrams();
+            //pegando instância atual do robô selecionado
+            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+            //pegando instância atual da posição da bola
+            SSL_DetectionBall ball = vision->getLastBallDetection();
 
-        float bx = ball.x();
-        float by = ball.y();
-        float rx = robot.x();
-        float ry = robot.y();
+            float bx = ball.x();
+            float by = ball.y();
+            float rx = robot.x();
+            float ry = robot.y();
 
-         //Calcula distância d entre a bola e o robô
-         float c1 = rx - bx;
-         float c2 = ry - by;
-         c1 = qPow(c1, 2);
-         c2 = qPow(c2, 2);
-         float d = qSqrt(c1 + c2);
-         std::cout << "Distância para a bola: " << d << std::endl;
+             //Calcula distância d entre a bola e o robô
+             float c1 = rx - bx;
+             float c2 = ry - by;
+             c1 = qPow(c1, 2);
+             c2 = qPow(c2, 2);
+             d = qSqrt(c1 + c2);
+             std::cout << "Distância para a bola: " << d << std::endl;
 
-         //calcula velocidade v necessária para chegar na bola
-         float v = d;
+             int divisor;
 
-         //Aciona o robô para ir em frente, com o spinner ligado para segurar a bola
-         actuator->sendCommand(isYellow, chosenID, v, 0, 0, true, 0, false);
-         usleep(200000);//sleeps for 1 second
-         actuator->sendCommand(isYellow, chosenID, 0, 0, 0, true, 0, false);
+             if (d <= 200){
+                 divisor = 5000;
+             } else {
+                 divisor = 1000;
+             }
+
+             //calcula velocidade v necessária para chegar na bola
+             float v = d/divisor;
+
+             //Aciona o robô para ir em frente, com o spinner ligado para segurar a bola
+             actuator->sendCommand(isYellow, chosenID, v, 0, 0, true, 0, false);
+             usleep(100000);//sleeps for 1 second
+             actuator->sendCommand(isYellow, chosenID, 0, 0, 0, true, 0, false);
+         }
+         while (d > 110);
     };
 
     auto kickBall = [](Actuator *actuator, bool isYellow, int chosenID, float vk, bool isChip){
@@ -120,53 +167,29 @@ int main(int argc, char *argv[]) {
          actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, 0, false);
     };
 
-    auto moveToPointInFront = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, float px, float py, bool spinner) {
-
+    auto moveToPoint = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, float px, float py, bool spinner) {
         vision->processNetworkDatagrams();
         SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
 
-        float rx = robot.x();
-        float ry = robot.y();
+        float dx = (px - robot.x());
+        float dy = (py - robot.y());
 
-        float variacao = 0.1; //Limite de erro do robô
+        while (dx > 5 && dy > 5){
+            float orientation = robot.orientation();
+            float vx = (dx * cos(orientation) + dy * sin(orientation));
+            float vy = (dy * cos(orientation) - dx * sin(orientation));
 
-        float vAux; //velocidade necessaria
-
-        while (rx < px-variacao || rx > px+variacao){
-            vAux = rx - px;
-            vAux = vAux/100;
-            actuator->sendCommand(isYellow, chosenID, vAux, 0, 0, spinner, 0, false);
-            usleep(100000);//sleeps for 1 second
+            actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
+            usleep(100000);
             actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
 
             vision->processNetworkDatagrams();
-            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+            robot = vision->getLastRobotDetection(isYellow, chosenID);
 
-            rx = robot.x();
-            ry = robot.y();
-            rx = roundf(rx * 100) / 100;
-            ry = roundf(ry * 100) / 100;
-            std::cout << rx << " | " << ry << std::endl;
+            dx = (px - robot.x());
+            dy = (py - robot.y());
         }
 
-        std::cout << "=======================================================================" << std::endl;
-
-        while (ry < py-variacao || ry > py+variacao){
-            vAux = ry - py;
-            vAux = vAux/100;
-            actuator->sendCommand(isYellow, chosenID, 0, vAux, 0, spinner, 0, false);
-            usleep(100000);//sleeps for 1 second
-            actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
-
-            vision->processNetworkDatagrams();
-            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
-
-            rx = robot.x();
-            ry = robot.y();
-            rx = roundf(rx * 100) / 100;
-            ry = roundf(ry * 100) / 100;
-            std::cout << rx << " | " << ry << std::endl;
-        }
     };
 
     auto manualMove = [](Actuator *actuator, bool isYellow, int chosenID, float vx, float vy, bool spinner){
@@ -186,7 +209,7 @@ int main(int argc, char *argv[]) {
             char modo = '0';
             cin >> modo;
             if (modo == 'a'){
-                std::cout << "O amarelo 3 ficará chutando ao gol!" << std::endl;
+                std::cout << "O amarelo 1 ficará chutando ao gol!" << std::endl;
 
                 while(true) {
                         // TimePoint
@@ -196,47 +219,18 @@ int main(int argc, char *argv[]) {
                         vision->processNetworkDatagrams();
                         usleep(1000000);
 
-                        float d = 5; // distância entre o robô e a bola
+                        //Coordenadas do gol
+                        float px = -8000;
+                        float py = 200;
 
-                         char aux;
+                        facePoint(vision, actuator, isYellow, chosenID, true, 0, 0);
 
-                        do{
-                            vision->processNetworkDatagrams();
-                            //pegando instância atual do robô selecionado
-                            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
-                            //pegando instância atual da posição da bola
-                            SSL_DetectionBall ball = vision->getLastBallDetection();
+                        pickBall(vision, actuator, isYellow, chosenID);
 
+                        facePoint(vision, actuator, isYellow, chosenID, false, px, py);
 
-                            facePoint(vision, actuator, isYellow, chosenID, true);
-                            std::cout << "Olhando para a bola===================================================================" << std::endl;
-                            pickBall(vision, actuator, isYellow, chosenID);
-                            std::cout << "indo para a bola===================================================================" << std::endl;
-                            cin >> aux;
-                            float bx = ball.x();
-                            float by = ball.y();
-                            float rx = robot.x();
-                            float ry = robot.y();
-
-
-                            std::cout << "Coord bola: " << bx << " | " << by << std::endl;
-                            std::cout << "Coord robô: " << rx << " | " << ry << std::endl;
-
-
-                             //Calcula distância d entre a bola e o robô
-                             float c1 = rx - bx;
-                             float c2 = ry - by;
-                             c1 = qPow(c1, 2);
-                             c2 = qPow(c2, 2);
-                             d = qSqrt(c1 + c2);
-                        }while(d>5);
-
-                        facePoint(vision, actuator, isYellow, chosenID, false);
-                        std::cout << "olhando para o gol===================================================================" << std::endl;
-                        cin >> aux;
                         kickBall(actuator, isYellow, chosenID, vk, isChip);
-                        std::cout << "Chutando a bola===================================================================" << std::endl;
-                        cin >> aux;
+
                         usleep(2000000);
 
                         //Faz com que a cada iteração, ele mude o tipo de chute.
@@ -332,7 +326,7 @@ int main(int argc, char *argv[]) {
                             float x, y;
                             cin >> x;
                             cin >> y;
-                            moveToPointInFront(vision, actuator,isYellow, chosenID, x, y, spinner);
+                            moveToPoint(vision, actuator,isYellow, chosenID, x, y, spinner);
                         } else if (command == 'l'){
                             std::cout << robot.x() << " | " << robot.y() << std::endl;
                         }
