@@ -9,6 +9,8 @@
 
 using namespace std;
 
+//Ações atômicas
+
 float getPlayerRotateAngleTo(float px, float py, SSL_DetectionRobot robot) {
     float rx = robot.x();
     float ry = robot.y();
@@ -41,6 +43,154 @@ float getPlayerRotateAngleTo(float px, float py, SSL_DetectionRobot robot) {
     return angleRobotToTarget;
 }
 
+void facePoint (Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall, float px, float py){
+    vision->processNetworkDatagrams();
+    //pegando instância atual do robô selecionado
+    SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+    //pegando instância atual da posição da bola
+    SSL_DetectionBall ball = vision->getLastBallDetection();
+
+    //Se true, ele vira para bola. Falso, ele vira para o gol.
+    if (pointIsBall){
+        px = ball.x();
+        py = ball.y();
+    }
+
+    //Angulo necessário para o robô apontar
+    float angle = getPlayerRotateAngleTo(px, py, robot);
+
+    //O robô parace sempre "fugir" da ponto, então temos que adcionar 180º ao angulo desejado
+    //No caso de radianos, 180º == pi
+    angle = angle + M_PI;
+
+    //a orientation varia entre -pi e +pi
+    if (angle > (M_PI)){
+        float resto = angle - M_PI;
+        angle = -M_PI + resto;
+    }
+
+    //Orientação atual do robô
+    float orientation = robot.orientation();
+
+    float vw; //velocidade angular
+
+    if (pointIsBall){
+        vw = 1;
+    } else{
+        vw = 0.5;
+    }
+
+    //Faz o robô girar
+    if (orientation > angle){
+        actuator->sendCommand(isYellow, chosenID, 0, 0, -vw, true, 0, false);
+    } else{
+        actuator->sendCommand(isYellow, chosenID, 0, 0, vw, true, 0, false);
+    }
+
+    float variacao = 0.02; //faixa de angulação aceitável para parar o loop
+    float faixaInf = angle-variacao;
+    float faixaSup = angle+variacao;
+
+
+    //Robô roda enquanto a orientação dele não estiver perto o bastante da variavel angle
+    while((orientation < faixaInf) || (orientation > faixaSup)){
+        vision->processNetworkDatagrams();
+        robot = vision->getLastRobotDetection(isYellow, chosenID);
+        orientation = robot.orientation();
+        std::cout << "Angulo necessário: " << angle << std::endl;
+        std::cout << "Orientação do robô: " << orientation << std::endl;
+    }
+
+    //para de rodar
+    actuator->sendCommand(isYellow, chosenID, 0, 0, 0, true, 0, false);
+}
+
+void pickBall (Vision *vision, Actuator *actuator, bool isYellow, int chosenID){
+    float d = 50000;
+    do {
+        vision->processNetworkDatagrams();
+        //pegando instância atual do robô selecionado
+        SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+        //pegando instância atual da posição da bola
+        SSL_DetectionBall ball = vision->getLastBallDetection();
+
+        float bx = ball.x();
+        float by = ball.y();
+        float rx = robot.x();
+        float ry = robot.y();
+
+         //Calcula distância d entre a bola e o robô
+         float c1 = rx - bx;
+         float c2 = ry - by;
+         c1 = qPow(c1, 2);
+         c2 = qPow(c2, 2);
+         d = qSqrt(c1 + c2);
+         std::cout << "Distância para a bola: " << d << std::endl;
+
+         int divisor;
+
+         if (d <= 200){
+             divisor = 5000;
+         } else {
+             divisor = 1000;
+         }
+
+         //calcula velocidade v necessária para chegar na bola
+         float v = d/divisor;
+
+         //Aciona o robô para ir em frente, com o spinner ligado para segurar a bola
+         actuator->sendCommand(isYellow, chosenID, v, 0, 0, true, 0, false);
+         usleep(100000);//sleeps for 1 second
+         actuator->sendCommand(isYellow, chosenID, 0, 0, 0, true, 0, false);
+     }
+     while (d > 110);
+}
+
+void kickBall (Actuator *actuator, bool isYellow, int chosenID, float vk, bool isChip){
+     //Teoricamente, o robô já está em posse da bola!
+
+     actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, vk, isChip);
+     usleep(1000000);//sleeps for 1 second
+     actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, 0, false);
+}
+
+void moveToPoint (Vision *vision, Actuator *actuator, bool isYellow, int chosenID, float px, float py, bool spinner) {
+    vision->processNetworkDatagrams();
+    SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+    float dx = (px - robot.x());
+    float dy = (py - robot.y());
+
+    while (dx > 5 && dy > 5){
+        float orientation = robot.orientation();
+        float vx = (dx * cos(orientation) + dy * sin(orientation));
+        float vy = (dy * cos(orientation) - dx * sin(orientation));
+
+        actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
+        usleep(100000);
+        actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+
+        vision->processNetworkDatagrams();
+        robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+        dx = (px - robot.x());
+        dy = (py - robot.y());
+    }
+
+}
+
+void manualMove (Actuator *actuator, bool isYellow, int chosenID, float vx, float vy, bool spinner){
+    actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
+    usleep(100000);//sleeps for 1 second
+    actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+}
+
+void manualRotation (Actuator *actuator, bool isYellow, int chosenID, float vw, bool spinner){
+    actuator->sendCommand(isYellow, chosenID, 0, 0, vw, spinner, 0, false);
+    usleep(100000);//sleeps for 1 second
+    actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+}
+
 int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
 
@@ -60,155 +210,7 @@ int main(int argc, char *argv[]) {
     int chosenID = 1;
     bool isChip = false; //define se o chute é chip.
 
-    auto facePoint = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall, float px, float py){
-        vision->processNetworkDatagrams();
-        //pegando instância atual do robô selecionado
-        SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
-        //pegando instância atual da posição da bola
-        SSL_DetectionBall ball = vision->getLastBallDetection();
-
-        //Se true, ele vira para bola. Falso, ele vira para o gol.
-        if (pointIsBall){
-            px = ball.x();
-            py = ball.y();
-        }
-
-        //Angulo necessário para o robô apontar
-        float angle = getPlayerRotateAngleTo(px, py, robot);
-
-        //O robô parace sempre "fugir" da ponto, então temos que adcionar 180º ao angulo desejado
-        //No caso de radianos, 180º == pi
-        angle = angle + M_PI;
-
-        //a orientation varia entre -pi e +pi
-        if (angle > (M_PI)){
-            float resto = angle - M_PI;
-            angle = -M_PI + resto;
-        }
-
-        //Orientação atual do robô
-        float orientation = robot.orientation();
-
-        float vw; //velocidade angular
-
-        if (pointIsBall){
-            vw = 1;
-        } else{
-            vw = 0.5;
-        }
-
-        //Faz o robô girar
-        if (orientation > angle){
-            actuator->sendCommand(isYellow, chosenID, 0, 0, -vw, true, 0, false);
-        } else{
-            actuator->sendCommand(isYellow, chosenID, 0, 0, vw, true, 0, false);
-        }
-
-        float variacao = 0.02; //faixa de angulação aceitável para parar o loop
-        float faixaInf = angle-variacao;
-        float faixaSup = angle+variacao;
-
-
-        //Robô roda enquanto a orientação dele não estiver perto o bastante da variavel angle
-        while((orientation < faixaInf) || (orientation > faixaSup)){
-            vision->processNetworkDatagrams();
-            robot = vision->getLastRobotDetection(isYellow, chosenID);
-            orientation = robot.orientation();
-            std::cout << "Angulo necessário: " << angle << std::endl;
-            std::cout << "Orientação do robô: " << orientation << std::endl;
-        }
-
-        //para de rodar
-        actuator->sendCommand(isYellow, chosenID, 0, 0, 0, true, 0, false);
-    };
-
-    auto pickBall = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID){
-        float d = 50000;
-        do {
-            vision->processNetworkDatagrams();
-            //pegando instância atual do robô selecionado
-            SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
-            //pegando instância atual da posição da bola
-            SSL_DetectionBall ball = vision->getLastBallDetection();
-
-            float bx = ball.x();
-            float by = ball.y();
-            float rx = robot.x();
-            float ry = robot.y();
-
-             //Calcula distância d entre a bola e o robô
-             float c1 = rx - bx;
-             float c2 = ry - by;
-             c1 = qPow(c1, 2);
-             c2 = qPow(c2, 2);
-             d = qSqrt(c1 + c2);
-             std::cout << "Distância para a bola: " << d << std::endl;
-
-             int divisor;
-
-             if (d <= 200){
-                 divisor = 5000;
-             } else {
-                 divisor = 1000;
-             }
-
-             //calcula velocidade v necessária para chegar na bola
-             float v = d/divisor;
-
-             //Aciona o robô para ir em frente, com o spinner ligado para segurar a bola
-             actuator->sendCommand(isYellow, chosenID, v, 0, 0, true, 0, false);
-             usleep(100000);//sleeps for 1 second
-             actuator->sendCommand(isYellow, chosenID, 0, 0, 0, true, 0, false);
-         }
-         while (d > 110);
-    };
-
-    auto kickBall = [](Actuator *actuator, bool isYellow, int chosenID, float vk, bool isChip){
-         //Teoricamente, o robô já está em posse da bola!
-
-         actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, vk, isChip);
-         usleep(1000000);//sleeps for 1 second
-         actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, 0, false);
-    };
-
-    auto moveToPoint = [](Vision *vision, Actuator *actuator, bool isYellow, int chosenID, float px, float py, bool spinner) {
-        vision->processNetworkDatagrams();
-        SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
-
-        float dx = (px - robot.x());
-        float dy = (py - robot.y());
-
-        while (dx > 5 && dy > 5){
-            float orientation = robot.orientation();
-            float vx = (dx * cos(orientation) + dy * sin(orientation));
-            float vy = (dy * cos(orientation) - dx * sin(orientation));
-
-            actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
-            usleep(100000);
-            actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
-
-            vision->processNetworkDatagrams();
-            robot = vision->getLastRobotDetection(isYellow, chosenID);
-
-            dx = (px - robot.x());
-            dy = (py - robot.y());
-        }
-
-    };
-
-    auto manualMove = [](Actuator *actuator, bool isYellow, int chosenID, float vx, float vy, bool spinner){
-        actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
-        usleep(100000);//sleeps for 1 second
-        actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
-    };
-
-    auto manualRotation = [](Actuator *actuator, bool isYellow, int chosenID, float vw, bool spinner){
-        actuator->sendCommand(isYellow, chosenID, 0, 0, vw, spinner, 0, false);
-        usleep(100000);//sleeps for 1 second
-        actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
-    };
-
-    while (true){
+ while (true){
             std::cout << "Qual modo deseja usar? 'a' para automático, 'm' para manual:" << std::endl;
             char modo = '0';
             cin >> modo;
