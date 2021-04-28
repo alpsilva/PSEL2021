@@ -43,7 +43,76 @@ float getPlayerRotateAngleTo(float px, float py, SSL_DetectionRobot robot) {
     return angleRobotToTarget;
 }
 
-void facePoint (Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall, float px, float py){
+void rotateTo(Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall, float px, float py, bool spinner) {
+    vision->processNetworkDatagrams();
+
+    if (pointIsBall){
+        SSL_DetectionBall ball = vision->getLastBallDetection();
+        px = ball.x();
+        py = ball.y();
+    }
+
+    SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+    float angleRobotToObjective = getPlayerRotateAngleTo(px, py, robot);
+    float ori = robot.orientation();
+
+    if(ori > M_PI) ori -= 2.0 * M_PI;
+    if(ori < -M_PI) ori += 2.0 * M_PI;
+
+    float angleRobotToTarget = ori + angleRobotToObjective;
+
+    float vw = 1;
+
+    float angleError = 0.05; //Aproximadamente 3 graus;
+
+    actuator->sendCommand(isYellow, chosenID, 0, 0, vw, spinner, 0, false);
+
+    while(ori != angleRobotToTarget){
+        vision->processNetworkDatagrams();
+        robot = vision->getLastRobotDetection(isYellow, chosenID);
+        ori = robot.orientation();
+    }
+
+    actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+}
+
+void goTo (Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall, float px, float py, bool spinner) {
+    vision->processNetworkDatagrams();
+    SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+    if (pointIsBall){
+        SSL_DetectionBall ball = vision->getLastBallDetection();
+        px = ball.x();
+        py = ball.y();
+    }
+
+    float dx = (px - robot.x());
+    float dy = (py - robot.y());
+
+    float orientation = robot.orientation();
+    float vx = (dx * cos(orientation) + dy * sin(orientation));
+    float vy = (dy * cos(orientation) - dx * sin(orientation));
+
+    actuator->sendCommand(isYellow, chosenID, vx*100, vy*100, 0, spinner, 0, false);
+
+    std::cout << "dx e dy: " << dx << " | " << dy << std::endl;
+
+    while (fabs(dx) > 50 || fabs(dy) > 50){
+        vision->processNetworkDatagrams();
+        robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+        dx = (px - robot.x());
+        dy = (py - robot.y());
+
+    }
+
+    actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+    actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+    actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+}
+
+void facePoint (Vision *vision, Actuator *actuator, bool isYellow, int chosenID, bool pointIsBall, float px, float py, bool spinner){
     vision->processNetworkDatagrams();
     //pegando instância atual do robô selecionado
     SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
@@ -72,24 +141,22 @@ void facePoint (Vision *vision, Actuator *actuator, bool isYellow, int chosenID,
     //Orientação atual do robô
     float orientation = robot.orientation();
 
-    float vw; //velocidade angular
+    float vw = 0.5; //velocidade angular
 
-    if (pointIsBall){
-        vw = 1;
-    } else{
-        vw = 0.5;
+    if (angle - orientation < 0){
+        vw = vw * -1;
     }
 
     //Faz o robô girar
     if (orientation > angle){
-        actuator->sendCommand(isYellow, chosenID, 0, 0, -vw, true, 0, false);
+        actuator->sendCommand(isYellow, chosenID, 0, 0, -vw, spinner, 0, false);
     } else{
-        actuator->sendCommand(isYellow, chosenID, 0, 0, vw, true, 0, false);
+        actuator->sendCommand(isYellow, chosenID, 0, 0, vw, spinner, 0, false);
     }
 
-    float variacao = 0.02; //faixa de angulação aceitável para parar o loop
-    float faixaInf = angle-variacao;
-    float faixaSup = angle+variacao;
+    float angleError = 0.05; //Aproximadamente 3 graus;
+    float faixaInf = angle-angleError;
+    float faixaSup = angle+angleError;
 
 
     //Robô roda enquanto a orientação dele não estiver perto o bastante da variavel angle
@@ -154,30 +221,27 @@ void kickBall (Actuator *actuator, bool isYellow, int chosenID, float vk, bool i
      actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, 0, false);
 }
 
-void moveToPoint (Vision *vision, Actuator *actuator, bool isYellow, int chosenID, float px, float py, bool spinner) {
-    vision->processNetworkDatagrams();
-    SSL_DetectionRobot robot = vision->getLastRobotDetection(isYellow, chosenID);
+//Comportamentos mais complexos
 
-    float dx = (px - robot.x());
-    float dy = (py - robot.y());
+void bringBallCenter (Vision *vision, Actuator *actuator, bool isYellow, int chosenID) {
+    //1 - Olhar para a bola
+    facePoint(vision, actuator, isYellow, chosenID, true, 0, 0, false);
 
-    while (dx > 5 && dy > 5){
-        float orientation = robot.orientation();
-        float vx = (dx * cos(orientation) + dy * sin(orientation));
-        float vy = (dy * cos(orientation) - dx * sin(orientation));
+    //2 - Pegar a bola
+    goTo(vision, actuator, isYellow, chosenID, true, 0, 0, true);
 
-        actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
-        usleep(100000);
-        actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+    //3 - Olhar para o centro do campo
+    //facePoint(vision, actuator, isYellow, chosenID, false, 0, 0, true);
 
-        vision->processNetworkDatagrams();
-        robot = vision->getLastRobotDetection(isYellow, chosenID);
-
-        dx = (px - robot.x());
-        dy = (py - robot.y());
-    }
-
+    //4 - Ir até o centro com a bola
+    goTo(vision, actuator, isYellow, chosenID, false, 0, 0, true);
+    std::cout << "Bola no centro!" << std::endl;
+    actuator->sendCommand(isYellow, chosenID, 0, 0, 0, false, 0, false);
+    std::cout << "Velocidade deveria estar zerada!!" << std::endl;
 }
+
+
+//Métodos manuais
 
 void manualMove (Actuator *actuator, bool isYellow, int chosenID, float vx, float vy, bool spinner){
     actuator->sendCommand(isYellow, chosenID, vx, vy, 0, spinner, 0, false);
@@ -194,7 +258,7 @@ void manualRotation (Actuator *actuator, bool isYellow, int chosenID, float vw, 
 int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
 
-    Vision *vision = new Vision("224.0.0.1", 10002);
+    Vision *vision = new Vision("224.5.23.2", 10020);
     Actuator *actuator = new Actuator("127.0.0.1", 20011);
 
     // Desired frequency
@@ -222,28 +286,6 @@ int main(int argc, char *argv[]) {
 
                 // Process vision and actuator commands
                 vision->processNetworkDatagrams();
-                usleep(1000000);
-
-                //Coordenadas do gol
-                float px = -8000;
-                float py = 200;
-
-                facePoint(vision, actuator, isYellow, chosenID, true, 0, 0);
-
-                pickBall(vision, actuator, isYellow, chosenID);
-
-                facePoint(vision, actuator, isYellow, chosenID, false, px, py);
-
-                kickBall(actuator, isYellow, chosenID, vk, isChip);
-
-                usleep(2000000);
-
-                //Faz com que a cada iteração, ele mude o tipo de chute.
-                if (isChip){
-                    isChip = false;
-                } else{
-                    isChip = true;
-                }
 
                 // TimePoint
                 std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
@@ -299,51 +341,59 @@ int main(int argc, char *argv[]) {
 
                 cin >> command;
 
-                if (command == 'w'){
-                    manualMove(actuator, isYellow, chosenID, v, 0, spinner);
-                } else if (command == 'a') {
-                    manualMove(actuator, isYellow, chosenID, 0, v, spinner);
-                } else if (command == 's') {
-                    manualMove(actuator, isYellow, chosenID, -v, 0, spinner);
-                } else if (command == 'd') {
-                    manualMove(actuator, isYellow, chosenID, 0, -v, spinner);
-                } else if (command == 'q'){
-                    manualRotation(actuator, isYellow, chosenID, vw, spinner);
-                } else if (command == 'e'){
-                    manualRotation(actuator, isYellow, chosenID, -vw, spinner);
-                } else if (command == 'z') {
-                    //Faz o robô chutar!
-                    kickBall(actuator, isYellow, chosenID, vk, false);
-                    spinner = false;
-                } else if (command == 'x'){
-                    //Faz o robô chutar parabolicamente!
-                    kickBall(actuator, isYellow, chosenID, vk, true);
-                    spinner = false;
-                } else if (command == 'c') {
-                    //Liga/desliga o spinner o spinner
-                    if (spinner){
+                switch (command) {
+                    case 'w': manualMove(actuator, isYellow, chosenID, v, 0, spinner);
+                    break;
+                    case 'a': manualMove(actuator, isYellow, chosenID, 0, v, spinner);
+                    break;
+                    case 's': manualMove(actuator, isYellow, chosenID, -v, 0, spinner);
+                    break;
+                    case 'd': manualMove(actuator, isYellow, chosenID, 0, -v, spinner);
+                    break;
+                    case 'q': manualRotation(actuator, isYellow, chosenID, vw, spinner);
+                    break;
+                    case 'e': manualRotation(actuator, isYellow, chosenID, -vw, spinner);
+                    break;
+                    case 'z':
+                        kickBall(actuator, isYellow, chosenID, vk, false);
                         spinner = false;
-                        std::cout << "Spinner desligado." << std::endl;
-                    } else {
-                        spinner = true;
-                        std::cout << "Spinner ligado." << std::endl;
-                    }
+                    break;
+                    case 'x':
+                        kickBall(actuator, isYellow, chosenID, vk, true);
+                        spinner = false;
+                    break;
+                    case 'c':
+                        //Liga/desliga o spinner o spinner
+                        if (spinner){
+                            spinner = false;
+                            std::cout << "Spinner desligado." << std::endl;
+                        } else {
+                            spinner = true;
+                            std::cout << "Spinner ligado." << std::endl;
+                        }
+                        actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
+                    break;
+                    case 'b':
+                        //olha para a bola
+                        facePoint(vision, actuator, isYellow, chosenID, true, 0, 0, spinner);
+                    break;
+                    case 'g':
+                        //atenção
+                        //Quando no simulador aparece x=0.100, o vision retorna como robot.x() = 1000.
+                        float x, y;
+                        cin >> x;
+                        cin >> y;
+                        goTo(vision, actuator, isYellow, chosenID, false, x, y, spinner);
+                    break;
+                    case 'l':
+                        vision->processNetworkDatagrams();
+                        std::cout << robot.x() << " | " << robot.y() << std::endl;
+                    break;
+                    case '1': bringBallCenter(vision, actuator, isYellow, chosenID);
                     actuator->sendCommand(isYellow, chosenID, 0, 0, 0, spinner, 0, false);
-                } else if (command == 'b'){
-                    //olha para a bola
-                    facePoint(vision, actuator, isYellow, chosenID, true, 0, 0);
+                    break;
                 }
 
-                else if (command == 'g'){
-                    //atenção
-                    //Quando no simulador aparece x=0.100, o vision retorna como robot.x() = 1000.
-                    float x, y;
-                    cin >> x;
-                    cin >> y;
-                    moveToPoint(vision, actuator,isYellow, chosenID, x, y, spinner);
-                } else if (command == 'l'){
-                    std::cout << robot.x() << " | " << robot.y() << std::endl;
-                }
 
                 // TimePoint
                 std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
