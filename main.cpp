@@ -50,6 +50,7 @@ QPair<float, float> getVelocities (float rx, float ry, float ori, float tx, floa
     float vx = (dx * cos(ori) + dy * sin(ori));
     float vy = (dy * cos(ori) - dx * sin(ori));
 
+    /*
     float divisor = 10;
 
     if (vx <= 500 || vy <= 500){
@@ -62,6 +63,18 @@ QPair<float, float> getVelocities (float rx, float ry, float ori, float tx, floa
 
     vx = vx/divisor;
     vy = vy/divisor;
+    */
+
+    vx = vx/500;
+    vy = vy/500;
+
+    if (vx > 0){
+        vx = sqrt(vx);
+    }
+    if (vy > 0){
+        vy = sqrt(vy);
+    }
+
 
     QPair<float, float> velocities;
     velocities.first = vx;
@@ -81,7 +94,7 @@ int main(int argc, char *argv[]) {
 
     float vx = 0; //Velocidade de movimento eixo x
     float vy = 0; //Velocidade de movimento eixo y
-    float w = 2; //Velocidade angular base
+    float w = 3; //Velocidade angular base
     float vw = 0; //velocidade angular variavel
     bool spinner = false; //Toggle do spinner
 
@@ -166,9 +179,9 @@ int main(int argc, char *argv[]) {
                 std::cout << "neededAngle: "  << angleRobotToTarget << endl;
                 std::cout << "orientation: " << orientation << endl;
                 if (fabs(orientation) < fabs(angleRobotToTarget)){
-                    vw = w;
-                } else{
                     vw = w * -1;
+                } else{
+                    vw = w;
                 }
             }
 
@@ -226,7 +239,7 @@ int main(int argc, char *argv[]) {
             std::cout << dx << " | " << dy << endl;
 
             //Checa se o robô já está em posse da bola
-            if (fabs(dx) <= 115 && fabs(dy) < 120){
+            if (fabs(dx) <= 120 && fabs(dy) < 120){
                 hasBall = true;
             } else{
                 hasBall = false;
@@ -249,7 +262,6 @@ int main(int argc, char *argv[]) {
             vy = velocities.second;
 
             //Angulação: é preciso que o robô rotacione até esse ponto.
-            //Angulação: é preciso que o robô rotacione até esse ponto.
             float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, lookTargetx, lookTargety);
 
             if(orientation > M_PI) orientation -= 2.0 * M_PI;
@@ -263,9 +275,9 @@ int main(int argc, char *argv[]) {
                 isLookingToTarget = true;
             } else {
                 if (fabs(orientation) < fabs(angleRobotToTarget)){
-                    vw = w;
-                } else{
                     vw = w * -1;
+                } else{
+                    vw = w;
                 }
             }
 
