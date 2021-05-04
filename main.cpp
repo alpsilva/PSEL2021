@@ -83,6 +83,11 @@ QPair<float, float> getVelocities (float rx, float ry, float ori, float tx, floa
     return velocities;
 }
 
+float calculateProportion(float angle, float vx){
+    float v = 3/pow(angle+1, 2);
+    return v * vx;
+}
+
 int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
 
@@ -208,6 +213,16 @@ int main(int argc, char *argv[]) {
         float kickPosx = -4000;
         float kickPosy = 0;
 
+        /*
+        //Dá aproximadamente -2.678
+        std::cout << getPlayerRotateAngleTo(kickPosx, kickPosy, 0, -6000, -1000) << std::endl;
+        //Dá aproximadamente +2.678
+        std::cout << getPlayerRotateAngleTo(kickPosx, kickPosy, 0, -6000, 1000) << std::endl;
+
+        float angleBarraLeft = -2.678;
+        float angleBarraRight = 2.678;
+        */
+
         while(true) {
             // TimePoint
             std::chrono::high_resolution_clock::time_point beforeProcess = std::chrono::high_resolution_clock::now();
@@ -234,9 +249,7 @@ int main(int argc, char *argv[]) {
             float dx = rx - bx; //distância no eixo x entre o robô e a bola.
             float dy = ry - by; //distância no eixo y entre o robô e a bola.
 
-            bool isLookingToTarget = false;
-
-            std::cout << dx << " | " << dy << endl;
+            //std::cout << dx << " | " << dy << endl;
 
             //Checa se o robô já está em posse da bola
             if (fabs(dx) <= 120 && fabs(dy) < 120){
@@ -268,6 +281,8 @@ int main(int argc, char *argv[]) {
             if(orientation < -M_PI) orientation += 2.0 * M_PI;
 
             float angleRobotToTarget = orientation + angleRobotToObjective;
+
+            bool isLookingToTarget = false;
 
             //Se o robô já estiver perto do ângulo, não é necessário rotacioná-lo.
             if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
@@ -306,6 +321,7 @@ int main(int argc, char *argv[]) {
             long remainingTime = (1000 / desiredFrequency) - (std::chrono::duration_cast<std::chrono::milliseconds>(afterProcess - beforeProcess)).count();
             std::this_thread::sleep_for(std::chrono::milliseconds(remainingTime));
         }
+
 
     }
 
