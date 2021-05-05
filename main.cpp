@@ -181,8 +181,8 @@ int main(int argc, char *argv[]) {
             if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
                 vw = 0;
             } else {
-                std::cout << "neededAngle: "  << angleRobotToTarget << endl;
-                std::cout << "orientation: " << orientation << endl;
+                //std::cout << "neededAngle: "  << angleRobotToTarget << endl;
+                //std::cout << "orientation: " << orientation << endl;
                 if (fabs(orientation) < fabs(angleRobotToTarget)){
                     vw = w * -1;
                 } else{
@@ -289,12 +289,44 @@ int main(int argc, char *argv[]) {
                 vw = 0;
                 isLookingToTarget = true;
             } else {
+                if (orientation > 0){
+                    if (angleRobotToTarget > 0){
+                        if (orientation < angleRobotToTarget){
+                            vw = w;
+                        } else{
+                            vw = w *-1;
+                        }
+                    } else{
+                        if (fabs(orientation) + fabs(angleRobotToTarget) > 3){
+                            vw = w;
+                        } else{
+                            vw = w *-1;
+                        }
+                    }
+                } else{
+                    if (angleRobotToTarget > 0){
+                        if (fabs(orientation) + fabs(angleRobotToTarget) > 3){
+                            vw = w;
+                        } else{
+                            vw = w *-1;
+                        }
+                    } else{
+                        if (orientation < angleRobotToTarget){
+                            vw = w;
+                        } else{
+                            vw = w *-1;
+                        }
+                    }
+                }
+            }
+
+            /*
                 if (fabs(orientation) < fabs(angleRobotToTarget)){
                     vw = w * -1;
                 } else{
                     vw = w;
                 }
-            }
+             */
 
             dx = rx - kickPosx; //distância no eixo x entre o robô e a posição de chute.
             dy = ry - kickPosy; //distância no eixo y entre o robô e a posição de chute.
