@@ -50,9 +50,9 @@ float getVx (float rx, float ry, float ori, float tx, float ty) {
     //vx = vx/500;
     //vy = vy/500;
 
-    if (vx > 0){
-        vx = sqrt(vx);
-    }
+    //if (vx > 0){
+    //    vx = sqrt(vx);
+    //}
     /*
     if (vy > 0){
         vy = sqrt(vy);
@@ -92,8 +92,8 @@ int main(int argc, char *argv[]) {
     // Desired frequency
     int desiredFrequency = 60;
 
-    float raio = 0; //Raio das rodas
-    float distEntreRodas = 0; //Distância entre as rodas
+    float raio = 2; //Raio das rodas
+    float distEntreRodas = 7; //Distância entre as rodas
 
     float vl; //Velocidade da roda esquerda
     float vr; //Velocidade da roda direita
@@ -104,53 +104,185 @@ int main(int argc, char *argv[]) {
     float angleError = 0.05; //aprox. 3º
 
     //Teste para fazer o robô ir até o centro
-    float moveTargetx = 0;
-    float moveTargety = 0;
+    float moveTargetx;
+    float moveTargety;
 
-    bool isInCenter = false;
+    bool isLookingToTarget;
 
-    while(true) {
-        // TimePoint
-        std::chrono::high_resolution_clock::time_point beforeProcess = std::chrono::high_resolution_clock::now();
+    std::cout << "1: Ir até o centro." << std::endl;
+    std::cout << "2: Modo atacante." << std::endl;
+    std::cout << "3: Modo atacante." << std::endl;
 
-        // Process vision and actuator commands
-        vision->processNetworkDatagrams();
+    char command;
+    cin >> command;
 
-        fira_message::Robot robot = vision->getLastRobotDetection(isYellow, chosenID);
+    if(command == '1'){
 
-        float rx = robot.x();
-        float ry = robot.y();
-        float orientation = robot.orientation();
+        moveTargetx = 0;
+        moveTargety = 0;
 
-        fira_message::Ball ball = vision->getLastBallDetection();
+        while(true) {
+            // TimePoint
+            std::chrono::high_resolution_clock::time_point beforeProcess = std::chrono::high_resolution_clock::now();
 
-        float bx = ball.x();
-        float by = ball.y();
+            // Process vision and actuator commands
+            vision->processNetworkDatagrams();
+
+            fira_message::Robot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+            float rx = robot.x();
+            float ry = robot.y();
+            float orientation = robot.orientation();
+
+            fira_message::Ball ball = vision->getLastBallDetection();
+
+            float bx = ball.x();
+            float by = ball.y();
 
 
-        //Angulação: é preciso que o robô rotacione até esse ponto.
-        float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, moveTargety);
+            //Angulação: é preciso que o robô rotacione até esse ponto.
+            float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, moveTargety);
 
-        if(orientation > M_PI) orientation -= 2.0 * M_PI;
-        if(orientation < -M_PI) orientation += 2.0 * M_PI;
+            if(orientation > M_PI) orientation -= 2.0 * M_PI;
+            if(orientation < -M_PI) orientation += 2.0 * M_PI;
 
-        float angleRobotToTarget = orientation + angleRobotToObjective;
+            float angleRobotToTarget = orientation + angleRobotToObjective;
 
-        float v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
+            isLookingToTarget = false;
 
-        QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
+            //Se o robô já estiver perto do ângulo, não é necessário rotacioná-lo.
+            if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
+                angleRobotToTarget = 0;
+                isLookingToTarget = true;
+            }
 
-        vl = wheelVelocities.first;
-        vr = wheelVelocities.second;
+            float v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
 
-        actuator->sendCommand(isYellow, chosenID, vl, vr);
+            QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
 
-        // TimePoint
-        std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
+            vl = wheelVelocities.first;
+            vr = wheelVelocities.second;
 
-        // Sleep thread
-        long remainingTime = (1000 / desiredFrequency) - (std::chrono::duration_cast<std::chrono::milliseconds>(afterProcess - beforeProcess)).count();
-        std::this_thread::sleep_for(std::chrono::milliseconds(remainingTime));
+            if (isLookingToTarget){
+                vl = vl*100;
+                vr = vr*100;
+            }
+
+            actuator->sendCommand(isYellow, chosenID, vl, vr);
+
+            // TimePoint
+            std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
+
+            // Sleep thread
+            long remainingTime = (1000 / desiredFrequency) - (std::chrono::duration_cast<std::chrono::milliseconds>(afterProcess - beforeProcess)).count();
+            std::this_thread::sleep_for(std::chrono::milliseconds(remainingTime));
+        }
+
+
+    } else if (command = '2'){
+
+    } else if (command = '3'){
+
+        moveTargetx = 6700;
+        moveTargety = 0;
+
+        float v;
+
+        bool isInGoal = false;
+
+        while(true) {
+            // TimePoint
+            std::chrono::high_resolution_clock::time_point beforeProcess = std::chrono::high_resolution_clock::now();
+
+            // Process vision and actuator commands
+            vision->processNetworkDatagrams();
+
+            fira_message::Robot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+            float rx = robot.x();
+            float ry = robot.y();
+            float orientation = robot.orientation();
+
+            fira_message::Ball ball = vision->getLastBallDetection();
+
+            float bx = ball.x();
+            float by = ball.y();
+
+            if (isInGoal){
+
+                moveTargety = by;
+
+                if (moveTargety > 2000){
+                    moveTargety = 2000;
+                }
+                if (moveTargety < -2000){
+                    moveTargety = -2000;
+                }
+
+                float d = fabs(ry) - fabs(moveTargety); //distancia (no eixo y) entre o goleiro e a bola.
+
+                if (d <= 120){
+                    v = 0;
+                } else{
+                    if (d > 0){
+                       v = sqrt(d);
+                    } else {
+                       v = 0;
+                    }
+                }
+
+                if (ry > moveTargety){
+                    v = v * -1;
+                }
+
+                vl = v;
+                vr = v;
+
+
+            } else{
+                //Vai até a posição do gol
+            }
+
+
+            //Angulação: é preciso que o robô rotacione até esse ponto.
+            float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, moveTargety);
+
+            if(orientation > M_PI) orientation -= 2.0 * M_PI;
+            if(orientation < -M_PI) orientation += 2.0 * M_PI;
+
+            float angleRobotToTarget = orientation + angleRobotToObjective;
+
+            isLookingToTarget = false;
+
+            //Se o robô já estiver perto do ângulo, não é necessário rotacioná-lo.
+            if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
+                angleRobotToTarget = 0;
+                isLookingToTarget = true;
+            }
+
+            float v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
+
+            QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
+
+            vl = wheelVelocities.first;
+            vr = wheelVelocities.second;
+
+            if (isLookingToTarget){
+                vl = vl*100;
+                vr = vr*100;
+            }
+
+            actuator->sendCommand(isYellow, chosenID, vl, vr);
+
+            // TimePoint
+            std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
+
+            // Sleep thread
+            long remainingTime = (1000 / desiredFrequency) - (std::chrono::duration_cast<std::chrono::milliseconds>(afterProcess - beforeProcess)).count();
+            std::this_thread::sleep_for(std::chrono::milliseconds(remainingTime));
+        }
+
+
     }
 
     return a.exec();
