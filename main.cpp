@@ -186,6 +186,112 @@ int main(int argc, char *argv[]) {
 
     } else if (command == '2'){
 
+        bool isBehindBall = false;
+        bool isFacingEnemyCamp = false;
+
+        float lookTargetx;
+        float lookTargety;
+
+        while(true) {
+            // TimePoint
+            std::chrono::high_resolution_clock::time_point beforeProcess = std::chrono::high_resolution_clock::now();
+
+            // Process vision and actuator commands
+            vision->processNetworkDatagrams();
+
+            fira_message::Robot robot = vision->getLastRobotDetection(isYellow, chosenID);
+
+            float rx = robot.x();
+            float ry = robot.y();
+            float orientation = robot.orientation();
+
+            fira_message::Ball ball = vision->getLastBallDetection();
+
+            //coordenadas da bola.
+            float bx = ball.x();
+            float by = ball.y();
+
+            //coordenada x para ir levemente para trás da bola.
+            float behindbx = bx + 150;
+
+            if (fabs(rx - behindbx) <= 50 && fabs(ry - by) <= 50){
+                isBehindBall = true;
+            } else {
+                isBehindBall = false;
+            }
+
+            if (isBehindBall){
+                if (isFacingEnemyCamp){
+                    std::cout << "Chutando." << std::endl;
+                    //"chuta": Acelara com tudo na direção do campo.
+                    vl = 500;
+                    vr = 500;
+                } else{
+                    std::cout << "Rotacionando." << std::endl;
+                    //Rotaciona até estar de frente para o campo inimigo.
+                    lookTargetx = rx - 0.4;
+                    lookTargety = ry;
+                    //Angulação: é preciso que o robô rotacione até esse ponto.
+                    float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, lookTargetx, lookTargety);
+
+                    if(orientation > M_PI) orientation -= 2.0 * M_PI;
+                    if(orientation < -M_PI) orientation += 2.0 * M_PI;
+
+                    float angleRobotToTarget = orientation + angleRobotToObjective;
+
+                    if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
+                        angleRobotToTarget = 0;
+                        isFacingEnemyCamp = true;
+                    } else {
+                        isFacingEnemyCamp = false;
+                    }
+
+                    v = 0; //O robô não precisa sair do lugar, apenas rotacionar.
+
+                    QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
+
+                    vl = wheelVelocities.first;
+                    vr = wheelVelocities.second;
+                }
+            } else{
+                std::cout << "Deslocando." << std::endl;
+                //Desloca-se até estar atrás da bola.
+                moveTargetx = behindbx;
+                moveTargety = by;
+
+                //Angulação: é preciso que o robô rotacione até esse ponto.
+                float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, moveTargety);
+
+                if(orientation > M_PI) orientation -= 2.0 * M_PI;
+                if(orientation < -M_PI) orientation += 2.0 * M_PI;
+
+                float angleRobotToTarget = orientation + angleRobotToObjective;
+
+                if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
+                    angleRobotToTarget = 0;
+                }
+
+                v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
+
+                QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
+
+                vl = wheelVelocities.first;
+                vr = wheelVelocities.second;
+
+            }
+
+            actuator->sendCommand(isYellow, chosenID, vl, vr);
+
+            // TimePoint
+            std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
+
+            // Sleep thread
+            long remainingTime = (1000 / desiredFrequency) - (std::chrono::duration_cast<std::chrono::milliseconds>(afterProcess - beforeProcess)).count();
+            std::this_thread::sleep_for(std::chrono::milliseconds(remainingTime));
+        }
+
+
+
     } else if (command == '3'){
 
         moveTargetx = 6700;
