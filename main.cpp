@@ -92,8 +92,8 @@ int main(int argc, char *argv[]) {
     // Desired frequency
     int desiredFrequency = 60;
 
-    float raio = 2; //Raio das rodas
-    float distEntreRodas = 7; //Distância entre as rodas
+    float raio = 0.02; //Raio das rodas
+    float distEntreRodas = 0.075; //Distância entre as rodas
 
     float vl; //Velocidade da roda esquerda
     float vr; //Velocidade da roda direita
@@ -101,17 +101,19 @@ int main(int argc, char *argv[]) {
     bool isYellow = true;
     int chosenID = 0;
 
-    float angleError = 0.05; //aprox. 3º
+    float angleError = 0.07; //aprox. 3º
 
     //Teste para fazer o robô ir até o centro
     float moveTargetx;
     float moveTargety;
 
-    bool isLookingToTarget;
+    float v;
+
+    bool isLookingToTarget = false;
 
     std::cout << "1: Ir até o centro." << std::endl;
     std::cout << "2: Modo atacante." << std::endl;
-    std::cout << "3: Modo atacante." << std::endl;
+    std::cout << "3: Modo goleiro." << std::endl;
 
     char command;
     cin >> command;
@@ -139,7 +141,6 @@ int main(int argc, char *argv[]) {
             float bx = ball.x();
             float by = ball.y();
 
-
             //Angulação: é preciso que o robô rotacione até esse ponto.
             float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, moveTargety);
 
@@ -148,15 +149,15 @@ int main(int argc, char *argv[]) {
 
             float angleRobotToTarget = orientation + angleRobotToObjective;
 
-            isLookingToTarget = false;
-
-            //Se o robô já estiver perto do ângulo, não é necessário rotacioná-lo.
             if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
                 angleRobotToTarget = 0;
                 isLookingToTarget = true;
+            } else {
+
+                isLookingToTarget = false;
             }
 
-            float v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
+            v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
 
             QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
 
@@ -167,6 +168,10 @@ int main(int argc, char *argv[]) {
                 vl = vl*100;
                 vr = vr*100;
             }
+
+            //std::cout << angleRobotToTarget << std::endl;
+            //std::cout << vl << " | " << vr << std::endl;
+            //std::cout << bx << " | " << by << std::endl;
 
             actuator->sendCommand(isYellow, chosenID, vl, vr);
 
@@ -179,16 +184,17 @@ int main(int argc, char *argv[]) {
         }
 
 
-    } else if (command = '2'){
+    } else if (command == '2'){
 
-    } else if (command = '3'){
+    } else if (command == '3'){
 
         moveTargetx = 6700;
         moveTargety = 0;
 
-        float v;
-
         bool isInGoal = false;
+
+        bool isInPosition = false;
+
 
         while(true) {
             // TimePoint
@@ -237,42 +243,83 @@ int main(int argc, char *argv[]) {
 
                 vl = v;
                 vr = v;
+                std::cout << "Defendendo." << std::endl;
 
+                actuator->sendCommand(isYellow, chosenID, vl, vr);
 
             } else{
                 //Vai até a posição do gol
+                moveTargetx = 6700;
+                moveTargety = 0;
+                isInPosition = false;
+                float dx = fabs(rx - moveTargetx);
+                float dy = fabs(ry - moveTargety);
+                if (dx <= 120 && dy <= 120){
+                    isInPosition = true;
+                }
+
+                if(isInPosition){
+                    //rotaciona
+                    //Angulação: é preciso que o robô rotacione até esse ponto.
+                    float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, 2000);
+
+                    if(orientation > M_PI) orientation -= 2.0 * M_PI;
+                    if(orientation < -M_PI) orientation += 2.0 * M_PI;
+
+                    float angleRobotToTarget = orientation + angleRobotToObjective;
+
+                    isLookingToTarget = false;
+
+                    //Se o robô já estiver perto do ângulo, não é necessário rotacioná-lo.
+                    if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
+                        angleRobotToTarget = 0;
+                        isLookingToTarget = true;
+                    }
+
+                    QPair<float, float> wheelVelocities = getWheelVelocities(0, angleRobotToTarget, raio, distEntreRodas);
+
+                    vl = wheelVelocities.first;
+                    vr = wheelVelocities.second;
+                    std::cout << "Rotacionando." << std::endl;
+
+                    actuator->sendCommand(isYellow, chosenID, vl, vr);
+
+                } else{
+                    //vai até a posição
+                    //Angulação: é preciso que o robô rotacione até esse ponto.
+                    float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, moveTargety);
+
+                    if(orientation > M_PI) orientation -= 2.0 * M_PI;
+                    if(orientation < -M_PI) orientation += 2.0 * M_PI;
+
+                    float angleRobotToTarget = orientation + angleRobotToObjective;
+
+                    isLookingToTarget = false;
+
+                    //Se o robô já estiver perto do ângulo, não é necessário rotacioná-lo.
+                    if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
+                        angleRobotToTarget = 0;
+                        isLookingToTarget = true;
+                    }
+
+                    float v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
+
+                    QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
+
+                    vl = wheelVelocities.first;
+                    vr = wheelVelocities.second;
+                    std::cout << "Deslocando." << std::endl;
+
+                    actuator->sendCommand(isYellow, chosenID, vl, vr);
+                }
             }
 
 
-            //Angulação: é preciso que o robô rotacione até esse ponto.
-            float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, moveTargety);
-
-            if(orientation > M_PI) orientation -= 2.0 * M_PI;
-            if(orientation < -M_PI) orientation += 2.0 * M_PI;
-
-            float angleRobotToTarget = orientation + angleRobotToObjective;
-
-            isLookingToTarget = false;
-
-            //Se o robô já estiver perto do ângulo, não é necessário rotacioná-lo.
-            if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
-                angleRobotToTarget = 0;
-                isLookingToTarget = true;
+            if (isInPosition && isLookingToTarget){
+                isInGoal = true;
+            } else{
+                isInGoal = false;
             }
-
-            float v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
-
-            QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
-
-            vl = wheelVelocities.first;
-            vr = wheelVelocities.second;
-
-            if (isLookingToTarget){
-                vl = vl*100;
-                vr = vr*100;
-            }
-
-            actuator->sendCommand(isYellow, chosenID, vl, vr);
 
             // TimePoint
             std::chrono::high_resolution_clock::time_point afterProcess = std::chrono::high_resolution_clock::now();
