@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
     bool isYellow = true;
     int chosenID = 0;
 
-    float angleError = 0.07; //aprox. 3º
+    float angleError = 0.05; //aprox. 3º
 
     //Teste para fazer o robô ir até o centro
     float moveTargetx;
@@ -212,9 +212,9 @@ int main(int argc, char *argv[]) {
             float by = ball.y();
 
             //coordenada x para ir levemente para trás da bola.
-            float behindbx = bx + 150;
+            float behindbx = bx + 0.100;
 
-            if (fabs(rx - behindbx) <= 50 && fabs(ry - by) <= 50){
+            if (fabs(rx - behindbx) <= 0.050 && fabs(ry - by) <= 0.050){
                 isBehindBall = true;
             } else {
                 isBehindBall = false;
@@ -222,25 +222,25 @@ int main(int argc, char *argv[]) {
 
             if (isBehindBall){
                 if (isFacingEnemyCamp){
-                    std::cout << "Chutando." << std::endl;
+                    //std::cout << "Chutando." << std::endl;
                     //"chuta": Acelara com tudo na direção do campo.
-                    vl = 500;
-                    vr = 500;
+                    vl = 2000;
+                    vr = 2000;
                 } else{
-                    std::cout << "Rotacionando." << std::endl;
+                    //std::cout << "Rotacionando." << std::endl;
                     //Rotaciona até estar de frente para o campo inimigo.
                     lookTargetx = rx - 0.4;
                     lookTargety = ry;
                     //Angulação: é preciso que o robô rotacione até esse ponto.
-                    float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, lookTargetx, lookTargety);
+                    float angleRobotToObjective = getPlayerRotateAngleTo(rx, ry, orientation, moveTargetx, moveTargety);
 
                     if(orientation > M_PI) orientation -= 2.0 * M_PI;
                     if(orientation < -M_PI) orientation += 2.0 * M_PI;
 
-                    float angleRobotToTarget = orientation + angleRobotToObjective;
+                    //float angleRobotToTarget = orientation + angleRobotToObjective;
 
-                    if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
-                        angleRobotToTarget = 0;
+                    if (((angleRobotToObjective - angleError) <= orientation) && (orientation <= (angleRobotToObjective + angleError))){
+                        angleRobotToObjective = 0;
                         isFacingEnemyCamp = true;
                     } else {
                         isFacingEnemyCamp = false;
@@ -248,13 +248,59 @@ int main(int argc, char *argv[]) {
 
                     v = 0; //O robô não precisa sair do lugar, apenas rotacionar.
 
-                    QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
+                    QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToObjective, raio, distEntreRodas);
 
                     vl = wheelVelocities.first;
                     vr = wheelVelocities.second;
+
+                    float absolutevl = fabs(vl);
+                    float absolutevr = fabs(vr);
+                    float controle = 5;
+
+                    if(vl > 0){
+                        if (vr > 0){
+                            if (absolutevl - absolutevr < controle){
+                                vl = vr;
+                            }
+                        } else {
+                            if (absolutevl - absolutevr < controle){
+                                vl = vr * -1;
+                            }
+                        }
+                    } else{
+                        if (vr > 0){
+                            if (absolutevl - absolutevr < controle){
+                                vl = vr * -1;
+                            }
+                        } else {
+                            if (absolutevl - absolutevr < controle){
+                                vl = vr;
+                            }
+                        }
+                    }
+
+                    if (vl < 1 && vl > 0){
+                        vl = 1;
+                    }
+
+                    if (vl > -1 && vl < 0){
+                        vl = 1;
+                    }
+
+                    if (vr < 1 && vr > 0){
+                        vr = 1;
+                    }
+
+                    if (vr > -1 && vr < 0){
+                        vr = 1;
+                    }
+
+                    if (vl == vr){
+                        vl = vr = vr*20;
+                    }
                 }
             } else{
-                std::cout << "Deslocando." << std::endl;
+                //std::cout << "Deslocando." << std::endl;
                 //Desloca-se até estar atrás da bola.
                 moveTargetx = behindbx;
                 moveTargety = by;
@@ -265,21 +311,68 @@ int main(int argc, char *argv[]) {
                 if(orientation > M_PI) orientation -= 2.0 * M_PI;
                 if(orientation < -M_PI) orientation += 2.0 * M_PI;
 
-                float angleRobotToTarget = orientation + angleRobotToObjective;
+                //float angleRobotToTarget = orientation + angleRobotToObjective;
 
-                if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
-                    angleRobotToTarget = 0;
+                if (((angleRobotToObjective - angleError) <= orientation) && (orientation <= (angleRobotToObjective + angleError))){
+                    angleRobotToObjective = 0;
                 }
 
                 v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
 
-                QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
+                QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToObjective, raio, distEntreRodas);
 
                 vl = wheelVelocities.first;
                 vr = wheelVelocities.second;
 
+                float absolutevl = fabs(vl);
+                float absolutevr = fabs(vr);
+                float controle = 5;
+
+                if(vl > 0){
+                    if (vr > 0){
+                        if (absolutevl - absolutevr < controle){
+                            vl = vr;
+                        }
+                    } else {
+                        if (absolutevl - absolutevr < controle){
+                            vl = vr * -1;
+                        }
+                    }
+                } else{
+                    if (vr > 0){
+                        if (absolutevl - absolutevr < controle){
+                            vl = vr * -1;
+                        }
+                    } else {
+                        if (absolutevl - absolutevr < controle){
+                            vl = vr;
+                        }
+                    }
+                }
+
+                if (vl < 1 && vl > 0){
+                    vl = 1;
+                }
+
+                if (vl > -1 && vl < 0){
+                    vl = 1;
+                }
+
+                if (vr < 1 && vr > 0){
+                    vr = 1;
+                }
+
+                if (vr > -1 && vr < 0){
+                    vr = 1;
+                }
+
+                if (vl == vr){
+                    vl = vr = vr*20;
+                }
             }
 
+            std::cout << "orientation: " << orientation << std::endl;
+            std::cout << vl << " | " << vr << std::endl;
             actuator->sendCommand(isYellow, chosenID, vl, vr);
 
             // TimePoint
@@ -294,7 +387,7 @@ int main(int argc, char *argv[]) {
 
     } else if (command == '3'){
 
-        moveTargetx = 6700;
+        moveTargetx = 0.67;
         moveTargety = 0;
 
         bool isInGoal = false;
@@ -324,11 +417,11 @@ int main(int argc, char *argv[]) {
 
                 moveTargety = by;
 
-                if (moveTargety > 2000){
-                    moveTargety = 2000;
+                if (moveTargety > 0.2000){
+                    moveTargety = 0.2000;
                 }
-                if (moveTargety < -2000){
-                    moveTargety = -2000;
+                if (moveTargety < -0.2000){
+                    moveTargety = -0.2000;
                 }
 
                 float d = fabs(ry) - fabs(moveTargety); //distancia (no eixo y) entre o goleiro e a bola.
