@@ -147,26 +147,63 @@ int main(int argc, char *argv[]) {
             if(orientation > M_PI) orientation -= 2.0 * M_PI;
             if(orientation < -M_PI) orientation += 2.0 * M_PI;
 
-            float angleRobotToTarget = orientation + angleRobotToObjective;
+            //float angleRobotToTarget = orientation + angleRobotToObjective;
 
-            if (((angleRobotToTarget - angleError) <= orientation) && (orientation <= (angleRobotToTarget + angleError))){
-                angleRobotToTarget = 0;
-                isLookingToTarget = true;
-            } else {
-
-                isLookingToTarget = false;
+            if (((angleRobotToObjective - angleError) <= orientation) && (orientation <= (angleRobotToObjective + angleError))){
+                angleRobotToObjective = 0;
             }
 
             v = getVx(rx, ry, orientation, moveTargetx, moveTargety);
 
-            QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToTarget, raio, distEntreRodas);
+            QPair<float, float> wheelVelocities = getWheelVelocities(v, angleRobotToObjective, raio, distEntreRodas);
 
             vl = wheelVelocities.first;
             vr = wheelVelocities.second;
 
-            if (isLookingToTarget){
-                vl = vl*100;
-                vr = vr*100;
+            float absolutevl = fabs(vl);
+            float absolutevr = fabs(vr);
+            float controle = 5;
+
+            if(vl > 0){
+                if (vr > 0){
+                    if (absolutevl - absolutevr < controle){
+                        vl = vr;
+                    }
+                } else {
+                    if (absolutevl - absolutevr < controle){
+                        vl = vr * -1;
+                    }
+                }
+            } else{
+                if (vr > 0){
+                    if (absolutevl - absolutevr < controle){
+                        vl = vr * -1;
+                    }
+                } else {
+                    if (absolutevl - absolutevr < controle){
+                        vl = vr;
+                    }
+                }
+            }
+
+            if (vl < 1 && vl > 0){
+                vl = 1;
+            }
+
+            if (vl > -1 && vl < 0){
+                vl = 1;
+            }
+
+            if (vr < 1 && vr > 0){
+                vr = 1;
+            }
+
+            if (vr > -1 && vr < 0){
+                vr = 1;
+            }
+
+            if (vl == vr){
+                vl = vr = vr*20;
             }
 
             //std::cout << angleRobotToTarget << std::endl;
